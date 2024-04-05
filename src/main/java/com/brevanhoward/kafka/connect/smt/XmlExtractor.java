@@ -34,6 +34,7 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
                     "Field containing single nested key delimiter.");
 
     private static final String HEADER_REGEX = "<\\?xml[^>]*\\?>";
+    private static final String XML_REGEX = "^\\s*<\\?xml.+?\\?>.*<(.+?)>.*<\\/\\1>\\s*$";
     private String xmlDataKey; // key in resulting map to hold original xml.
     private String keyFieldDelimiter; // instance variable to store "keys.delimiter" configured values.
     private List<String> keyFieldNames; // instance variable to store "keys" configured values.
@@ -44,27 +45,14 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
         Map<String, Object> processedRecord;
 
         if (value instanceof String) {
-
-            if (!isXml((String) value)){
-                logger.warning("failed to process record due to non xml format");
-                return (R) operatingValue(record);
-            }
-
             processedRecord = processXml((String) value, keyFieldNames, keyFieldDelimiter);
             processedRecord.put(xmlDataKey, (String) value);
         } else if (value instanceof Map) {
             processedRecord = (Map<String, Object>) value;
-
             if (!processedRecord.containsKey(xmlDataKey)) {
                 logger.warning("failed to process record due to missing key");
                 return (R) operatingValue(record);
             }
-
-            if (!isXml((String) processedRecord.get(xmlDataKey))){
-                logger.warning("failed to process record due to non xml format");
-                return (R) operatingValue(record);
-            }
-
             processedRecord.putAll(processXml((String) processedRecord.get(xmlDataKey), keyFieldNames, keyFieldDelimiter));
         } else {
             return (R) operatingValue(record);
@@ -179,10 +167,6 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
 
         if (matcher.find()) { return matcher.group(); }
         return null;
-    }
-
-    private Boolean isXml(String data) {
-        return true;
     }
 
     @Override
