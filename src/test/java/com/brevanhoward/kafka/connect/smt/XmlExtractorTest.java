@@ -13,6 +13,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,7 +27,7 @@ public class XmlExtractorTest {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private SourceRecord stringSourceRecord;
     private SourceRecord mapSourceRecord;
-    private SourceRecord stringNonXmlSourceRecord;
+    private SourceRecord invalidSourceRecord;
     private Map<String, String> props;
     private XmlExtractor.Key<SourceRecord> xFormKey = new XmlExtractor.Key<>();
     private XmlExtractor.Value<SourceRecord> xFormValue = new XmlExtractor.Value<>();
@@ -60,12 +61,12 @@ public class XmlExtractorTest {
         mapSourceRecord = new SourceRecord(null, null, null,
                 null, null, xmlMapData, null, xmlMapData, null, null);
 
-        stringNonXmlSourceRecord = new SourceRecord(null, null, null,
-                null, null, "bad string format", null, "bad string format", null, null);
+        invalidSourceRecord = new SourceRecord(null, null, null,
+                null, null, new ArrayList<>(), null, new ArrayList<>(), null, null);
     }
 
     @Test
-    public void xmlExtractor_ValidateTransformOutputIsMap_GivenStringInputAtKey() {
+    public void xmlExtractor_ValidateTransformOutputIsMap_GivenValidStringInputAtKey() {
         SourceRecord transformedRecord = xFormKey.apply(stringSourceRecord);
         assertEquals(transformedRecord.value(), stringSourceRecord.value());
         assertFalse(transformedRecord.key()==stringSourceRecord.key());
@@ -73,7 +74,7 @@ public class XmlExtractorTest {
     }
 
     @Test
-    public void xmlExtractor_ValidateTransformOutputIsMap_GivenStringInputAtValue() {
+    public void xmlExtractor_ValidateTransformOutputIsMap_GivenValidStringInputAtValue() {
         SourceRecord transformedRecord = xFormValue.apply(stringSourceRecord);
         assertEquals(transformedRecord.key(), stringSourceRecord.key());
         assertFalse(transformedRecord.value()==stringSourceRecord.value());
@@ -166,9 +167,23 @@ public class XmlExtractorTest {
     }
 
     @Test
-    public void xmlExtractor_ValidateTransformOutputIsSameAsInput_GivenNonXmlInput() {
-        assertEquals(xFormKey.operatingValue(stringNonXmlSourceRecord), stringNonXmlSourceRecord.key());
-        assertEquals(xFormValue.operatingValue(stringNonXmlSourceRecord), stringNonXmlSourceRecord.value());
+    public void xmlExtractor_ValidateTransformOutputIsSameAsInput_GivenInvalidInputType() {
+        assertEquals(xFormKey.operatingValue(invalidSourceRecord), invalidSourceRecord.key());
+        assertEquals(xFormValue.operatingValue(invalidSourceRecord), invalidSourceRecord.value());
+    }
+
+    @Test
+    public void xmlExtractor_ValidateTransformOutputIsSameAsInput_GivenInvalidKeyInputType_AfterApply() {
+        SourceRecord transformedRecord = xFormKey.apply(invalidSourceRecord);
+        assertEquals(transformedRecord.key(), invalidSourceRecord.key());
+        assertEquals(transformedRecord.key().getClass(), invalidSourceRecord.key().getClass());
+    }
+
+    @Test
+    public void xmlExtractor_ValidateTransformOutputIsSameAsInput_GivenInvalidValueInputType_AfterApply() {
+        SourceRecord transformedRecord = xFormValue.apply(invalidSourceRecord);
+        assertEquals(transformedRecord.value(), invalidSourceRecord.value());
+        assertEquals(transformedRecord.value().getClass(), invalidSourceRecord.value().getClass());
     }
 
     @After

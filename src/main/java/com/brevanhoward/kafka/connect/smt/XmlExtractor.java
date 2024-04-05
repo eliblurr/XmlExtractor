@@ -34,7 +34,7 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
                     "Field containing single nested key delimiter.");
 
     private static final String HEADER_REGEX = "<\\?xml[^>]*\\?>";
-    private static final String XML_REGEX = "^\\s*<\\?xml.+?\\?>.*<(.+?)>.*<\\/\\1>\\s*$";
+    private static final String XML_REGEX = "^(\\s*<\\?xml[^,]+?\\?>)?.*";
     private String xmlDataKey; // key in resulting map to hold original xml.
     private String keyFieldDelimiter; // instance variable to store "keys.delimiter" configured values.
     private List<String> keyFieldNames; // instance variable to store "keys" configured values.
@@ -51,14 +51,21 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
             processedRecord = (Map<String, Object>) value;
             if (!processedRecord.containsKey(xmlDataKey)) {
                 logger.warning("failed to process record due to missing key");
-                return (R) operatingValue(record);
+                return record;
             }
+
             processedRecord.putAll(processXml((String) processedRecord.get(xmlDataKey), keyFieldNames, keyFieldDelimiter));
         } else {
-            return (R) operatingValue(record);
+            return record;
         }
 
         return newRecord(record, null, processedRecord);
+    }
+
+    private Boolean isXml(String data){
+        Pattern pattern = Pattern.compile(XML_REGEX);
+        Matcher matcher = pattern.matcher(data);
+        return matcher.matches();
     }
 
     private Map<String, Object> processXml (String xml, List<String> keysToExtract, String delimiter){
@@ -67,8 +74,8 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
         Map<String, Object> map;
 
         try {
-            xml.replaceAll(HEADER_REGEX, "");
-            map = xmlMapper.readValue(xml, Map.class);
+            String data = xml.replaceAll(HEADER_REGEX, "");
+            map = xmlMapper.readValue(data, Map.class);
         } catch (Exception e) {
             throw new IllegalArgumentException(e.getMessage());
         }
@@ -90,7 +97,6 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
                         }
                     }
                 }
-
                 put(parsedKey.get("id"), data);
             }
         }};
