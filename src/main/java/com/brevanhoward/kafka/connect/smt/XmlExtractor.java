@@ -3,7 +3,9 @@ package com.brevanhoward.kafka.connect.smt;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -55,6 +57,19 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
             }
 
             processedRecord.putAll(processXml((String) processedRecord.get(xmlDataKey), keyFieldNames, keyFieldDelimiter));
+        } else if (value instanceof Struct){
+
+            String tmp = ((Struct) value).getString(xmlDataKey);
+
+            if (tmp == null) {
+                logger.warning("failed to process record due to missing key");
+                return record;
+            }
+
+            processedRecord = structToMap((Struct) value);
+            processedRecord.putAll(processXml(tmp, keyFieldNames, keyFieldDelimiter));
+
+            return newRecord(record, null, processedRecord);
         } else {
             return record;
         }
@@ -162,9 +177,24 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
         if (data instanceof List<?>) {
             ((List<?>) data).removeIf(item -> !(item instanceof String) );
             ((List<?>) data).removeIf(item -> !Pattern.matches(filterValueRegex, (String) item));
+            List<String> res = (List) data;
+            return res.stream().distinct().collect(Collectors.toList());
         }
-        List<String> res = (List) data;
-        return res.stream().distinct().collect(Collectors.toList());
+
+        return data;
+//        if (data instanceof HashMap) {
+//
+//        }
+
+
+    }
+
+    private Map<String, Object> structToMap(Struct struct) {
+        Map<String, Object> resultMap = new HashMap<>();
+        for (Field field : struct.schema().fields()) {
+            resultMap.put(field.name(), struct.get(field));
+        }
+        return resultMap;
     }
 
     private String extractSubStringFromRegex(String data, String extractRegex) {

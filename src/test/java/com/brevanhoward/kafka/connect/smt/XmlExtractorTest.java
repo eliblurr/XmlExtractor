@@ -1,5 +1,8 @@
 package com.brevanhoward.kafka.connect.smt;
 
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.After;
@@ -26,6 +29,7 @@ public class XmlExtractorTest {
     private Map<String, Object> xmlMapData;
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private SourceRecord stringSourceRecord;
+    private SourceRecord structSourceRecord;
     private SourceRecord mapSourceRecord;
     private SourceRecord invalidSourceRecord;
     private Map<String, String> props;
@@ -47,13 +51,21 @@ public class XmlExtractorTest {
         }
 
         props = new HashMap<String, String>() {{
-            put("keys", "Customers.Customer.ContactName<ContactName>,Customers.Customer.ContactTitle<ContactTitle>,Customers.Customer.ContactName,MxML.trades.trade.portfolios.portfolio.portfolioLabel<labels><.*><_[^_].*$>,MxML.trades.trade.portfolios.portfolio.portfolioLabel<books><.*><^[^_]+>,Customers.Customer");
+            put("keys", "Customers.Customer.ContactName<ContactName>,Customers.Customer.ContactTitle<ContactTitle>,Customers.Customer.ContactName,trades.trade.portfolios.portfolio.portfolioLabel<labels><.*><_[^_].*$>,trades.trade.portfolios.portfolio.portfolioLabel<books><.*><^[^_]+>,Customers.Customer");
             put("keys.delimiter.regex", "\\.");
             put("xml.map.key", "blob");
         }};
 
         xFormValue.configure(props);
         xFormKey.configure(props);
+
+        Schema recordSchema = SchemaBuilder.struct().name("Record")
+                .field("blob", Schema.STRING_SCHEMA)
+                .field("books", Schema.STRING_SCHEMA)
+                .field("labels", Schema.STRING_SCHEMA)
+                .field("Customers.Customer.ContactName", Schema.STRING_SCHEMA)
+                .field("Customers.Customer", Schema.STRING_SCHEMA)
+                .build();
 
         stringSourceRecord = new SourceRecord(null, null, null,
                 null, null, xmlStringData, null, xmlStringData, null, null);
@@ -63,6 +75,10 @@ public class XmlExtractorTest {
 
         invalidSourceRecord = new SourceRecord(null, null, null,
                 null, null, new ArrayList<>(), null, new ArrayList<>(), null, null);
+
+        structSourceRecord = new SourceRecord(null, null, null,
+                null, recordSchema, new Struct(recordSchema).put("blob", xmlStringData), recordSchema, new Struct(recordSchema).put("blob", xmlStringData), null, null);
+
     }
 
     @Test
@@ -78,6 +94,22 @@ public class XmlExtractorTest {
         SourceRecord transformedRecord = xFormValue.apply(stringSourceRecord);
         assertEquals(transformedRecord.key(), stringSourceRecord.key());
         assertFalse(transformedRecord.value()==stringSourceRecord.value());
+        assertTrue(transformedRecord.value() instanceof Map);
+    }
+
+    @Test
+    public void xmlExtractor_ValidateTransformOutputIsMap_GivenValidStructInputAtKey() {
+        SourceRecord transformedRecord = xFormKey.apply(structSourceRecord);
+        assertEquals(transformedRecord.value(), structSourceRecord.value());
+        assertFalse(transformedRecord.key()==structSourceRecord.key());
+        assertTrue(transformedRecord.key() instanceof Map);
+    }
+
+    @Test
+    public void xmlExtractor_ValidateTransformOutputIsStruct_GivenValidStructInputAtValue() {
+        SourceRecord transformedRecord = xFormValue.apply(structSourceRecord);
+        assertEquals(transformedRecord.key(), structSourceRecord.key());
+        assertFalse(transformedRecord.value()==structSourceRecord.value());
         assertTrue(transformedRecord.value() instanceof Map);
     }
 
@@ -104,24 +136,31 @@ public class XmlExtractorTest {
 
         xFormKeyMock.apply(mapSourceRecord);
         xFormKeyMock.apply(stringSourceRecord);
+        xFormKeyMock.apply(structSourceRecord);
+
 
         xFormValueMock.apply(mapSourceRecord);
         xFormValueMock.apply(stringSourceRecord);
+        xFormValueMock.apply(structSourceRecord);
 
         verify(xFormKeyMock, times(1)).apply(mapSourceRecord);
         verify(xFormKeyMock, times(1)).apply(stringSourceRecord);
+        verify(xFormKeyMock, times(1)).apply(structSourceRecord);
 
         verify(xFormValueMock, times(1)).apply(mapSourceRecord);
         verify(xFormValueMock, times(1)).apply(stringSourceRecord);
+        verify(xFormValueMock, times(1)).apply(structSourceRecord);
     }
 
     @Test
     public void xmlExtractor_Config_ValidateKafkaRecordFieldToUse() {
         assertEquals(xFormValue.operatingValue(mapSourceRecord), mapSourceRecord.value());
         assertEquals(xFormValue.operatingValue(stringSourceRecord), stringSourceRecord.value());
+        assertEquals(xFormValue.operatingValue(structSourceRecord), structSourceRecord.value());
 
         assertEquals(xFormKey.operatingValue(mapSourceRecord), mapSourceRecord.value());
         assertEquals(xFormKey.operatingValue(stringSourceRecord), stringSourceRecord.value());
+        assertEquals(xFormKey.operatingValue(structSourceRecord), structSourceRecord.value());
     }
 
     @Test
@@ -143,6 +182,26 @@ public class XmlExtractorTest {
         assertTrue(record.containsKey("ContactName"));
         assertTrue(record.containsKey("ContactTitle"));
         assertTrue(record.containsKey("test_key"));
+        assertTrue(record.containsKey("blob"));
+    }
+
+    @Test
+    public void xmlExtractor_ValidateTransformOutputHasAllKeys_GivenStructInputAtKey() {
+        Map<?,?> record = (Map) xFormKey.apply(structSourceRecord).key();
+        assertFalse(record.containsKey("Customers.Customer.ContactTitle"));
+        assertTrue(record.containsKey("Customers.Customer.ContactName"));
+        assertTrue(record.containsKey("ContactName"));
+        assertTrue(record.containsKey("ContactTitle"));
+        assertTrue(record.containsKey("blob"));
+    }
+
+    @Test
+    public void xmlExtractor_ValidateTransformOutputHasAllKeys_GivenStructInputAtValue() {
+        Map<?,?> record = (Map) xFormValue.apply(structSourceRecord).value();
+        assertFalse(record.containsKey("Customers.Customer.ContactTitle"));
+        assertTrue(record.containsKey("Customers.Customer.ContactName"));
+        assertTrue(record.containsKey("ContactName"));
+        assertTrue(record.containsKey("ContactTitle"));
         assertTrue(record.containsKey("blob"));
     }
 
@@ -190,5 +249,6 @@ public class XmlExtractorTest {
     public void tearDown() throws Exception {
         xFormValue.close();
         xFormKey.close();
+        xmlMapData.clear();
     }
 }
