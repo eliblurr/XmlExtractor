@@ -16,6 +16,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transformation<R> {
 
@@ -181,11 +182,11 @@ public abstract class XmlExtractor<R extends ConnectRecord<R>> implements Transf
             return res.stream().distinct().collect(Collectors.toList());
         }
 
-        return data;
-//        if (data instanceof HashMap) {
-//
-//        }
+        if (data instanceof String) {
+            return Stream.of().distinct().collect(Collectors.toList());
+        }
 
+        return data;
 
     }
 
